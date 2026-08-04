@@ -126,7 +126,7 @@ serve(async (req) => {
 
       const GITHUB_PAT  = Deno.env.get("GITHUB_PAT") ?? "";
       const GITHUB_OWNER = "THOMAS-DYLAN";
-      const GITHUB_REPO  = "CTXLabz";
+      const GITHUB_REPO  = "CTX";
       const GITHUB_PATH  = `pdct img/${filename.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
 
       const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "-");
