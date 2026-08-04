@@ -10,10 +10,8 @@ import { supabase } from './supabase.js';
 let _couponMap = {}; // populated on first applyDiscount call
 let _dealsCache = null; // active deals from DB
 
-var _couponMapLoaded = 0;
 async function _loadCoupons() {
-  const now = Date.now();
-  if (Object.keys(_couponMap).length && now - _couponMapLoaded < 300000) return; // cache 5 min
+  if (Object.keys(_couponMap).length) return; // already loaded
   try {
     const { data } = await supabase
       .from('coupon_codes')
@@ -21,7 +19,6 @@ async function _loadCoupons() {
       .eq('active', true);
     (data || []).forEach(r => {
       _couponMap[r.code.toUpperCase()] = { pct: Number(r.discount_pct), label: r.code };
-      _couponMapLoaded = Date.now();
     });
   } catch(e) { console.warn('Could not load coupon codes:', e); }
 }
@@ -755,7 +752,7 @@ window.applyDiscountInModal = async function() {
 };
 
 // ── Mount PayPal buttons ──────────────────────────────────
-var _pendingShipping = null;
+async var _pendingShipping = null;
 
 function mountPayPal() {
   var container = document.getElementById('paypal-button-container');
@@ -796,16 +793,10 @@ function mountPayPal() {
       onClick: function(data, actions) {
         clearCheckoutError();
         if (!shippingValid()) {
-          var LABELS = {
-            'co-first': 'First Name', 'co-last': 'Last Name',
-            'co-email': 'Email', 'co-phone': 'Phone',
-            'co-street': 'Street Address', 'co-city': 'City',
-            'co-state': 'State', 'co-zip': 'ZIP Code'
-          };
           var missing = SHIP_RULES
             .filter(function(r) { var el = document.getElementById(r.id); return !el || !r.test(el.value.trim()); })
-            .map(function(r) { return LABELS[r.id] || r.id; });
-          showCheckoutError('Please complete: ' + missing.join(', '));
+            .map(function(r) { return r.id.replace('co-','').replace('-',' '); });
+          showCheckoutError('Missing or invalid: ' + missing.join(', '));
           SHIP_RULES.forEach(function(r) {
             var el = document.getElementById(r.id);
             var errEl = document.getElementById(r.err);
@@ -952,13 +943,7 @@ window.payCashApp = async function() {
     btn.textContent = 'Awaiting Payment Verification…';
     btn.style.background = '#888';
   }
-  try {
-    await finishOrder(shippingData, 'pending_cashapp');
-  } catch(e) {
-    console.error('CashApp finishOrder failed:', e);
-    showCheckoutError('Order failed — ' + (e.message || 'please try again.'));
-    if (btn) { btn.disabled = false; btn.textContent = 'Confirm Payment'; btn.style.background = ''; }
-  }
+  await finishOrder(shippingData, 'pending_cashapp');
 };
 
 // ── Order notification (shared by finishOrder + test button) ──
@@ -1085,7 +1070,7 @@ async function finishOrder(shipping, paymentStatus, skipInventory) {
         shipping_city:    shipping.city || null,
         shipping_state:   shipping.state || null,
         shipping_zip:     shipping.zip || null,
-        payment_method:   paymentStatus === 'pending_cashapp' ? 'cashapp' : paymentStatus === 'pending_zelle' ? 'zelle' : paymentStatus === 'pending_bitcoin' ? 'bitcoin' : 'paypal',
+        payment_method:   paymentStatus === 'pending_cashapp' ? 'cashapp' : 'paypal',
       });
       if (orderId) orderIds.push(orderId);
     }
