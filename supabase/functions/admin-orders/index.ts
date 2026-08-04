@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Unified Admin Edge Function — CTXLabz + 956 Labs
+// Unified Admin Edge Function — BigBoyPeps + 956 Labs
 // Handles: orders, products, coupon codes, deals
 //
 // Deploy: supabase functions deploy admin-orders --no-verify-jwt
@@ -83,12 +83,12 @@ serve(async (req) => {
     }
 
     if (action === "addProduct") {
-      const { name, category, price, bundle_price, inventory, potency, description, images, publish_at } = body;
+      const { name, category, price, bundle_price, inventory, potency, description, images } = body;
       if (!name || price === undefined) return json({ error: "Missing name or price" }, 400);
 
-      const insertPayload: Record<string, unknown> = {
+      const insertPayload = {
         name,
-        category:     category ? category.trim() : "Peptides",
+        category:     category || null,
         price:        Number(price),
         bundle_price: bundle_price ? Number(bundle_price) : null,
         inventory:    Number(inventory) || 0,
@@ -97,11 +97,6 @@ serve(async (req) => {
         images:       images            || null,
         active:       true,
       };
-      // Only set publish_at / active scheduling if a date was provided
-      if (publish_at) {
-        insertPayload.publish_at = publish_at;
-        insertPayload.active     = new Date(publish_at) > new Date() ? false : true;
-      }
 
       console.log("addProduct payload:", JSON.stringify(insertPayload));
 
@@ -124,96 +119,29 @@ serve(async (req) => {
       const { filename, imageBase64 } = body;
       if (!filename || !imageBase64) return json({ error: "Missing filename or imageBase64" }, 400);
 
-      const GITHUB_PAT  = Deno.env.get("GITHUB_PAT") ?? "";
-      const GITHUB_OWNER = "THOMAS-DYLAN";
-      const GITHUB_REPO  = "CTX";
-      const GITHUB_PATH  = `pdct img/${filename.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
-
       const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "-");
 
       try {
-        // ── 0. Remove background via remove.bg API ─────────────
-        const REMOVE_BG_KEY = Deno.env.get("REMOVE_BG_KEY") ?? "";
-        let finalBase64 = imageBase64;
-        let finalBytes: Uint8Array;
-
-        if (REMOVE_BG_KEY) {
-          try {
-            const rbForm = new FormData();
-            rbForm.append("image_file_b64", imageBase64);
-            rbForm.append("size", "auto");
-            rbForm.append("type", "product");
-            const rbRes = await fetch("https://api.remove.bg/v1.0/removebg", {
-              method:  "POST",
-              headers: { "X-Api-Key": REMOVE_BG_KEY },
-              body:    rbForm,
-            });
-            if (rbRes.ok) {
-              const rbBuf = await rbRes.arrayBuffer();
-              finalBytes = new Uint8Array(rbBuf);
-              finalBase64 = btoa(String.fromCharCode(...finalBytes));
-              console.log("remove.bg: background removed successfully");
-            } else {
-              console.warn("remove.bg failed:", await rbRes.text());
-              const bin = atob(imageBase64); finalBytes = new Uint8Array(bin.length);
-              for (let i = 0; i < bin.length; i++) finalBytes[i] = bin.charCodeAt(i);
-            }
-          } catch (e) {
-            console.warn("remove.bg error:", String(e));
-            const bin = atob(imageBase64); finalBytes = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) finalBytes[i] = bin.charCodeAt(i);
-          }
-        } else {
-          const bin = atob(imageBase64); finalBytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) finalBytes[i] = bin.charCodeAt(i);
+        // Decode base64 to bytes using a reliable loop (avoids memory issues with atob spread)
+        const binaryStr = atob(imageBase64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
         }
 
-        // ── 1. Push to GitHub pdct img/ folder ─────────────────
-        // Check if file already exists (need its SHA to update)
-        let sha: string | undefined;
-        try {
-          const checkRes = await fetch(
-            `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH.split("/").map(encodeURIComponent).join("/")}`,
-            { headers: { Authorization: `token ${GITHUB_PAT}`, Accept: "application/vnd.github+json" } }
-          );
-          if (checkRes.ok) {
-            const existing = await checkRes.json();
-            sha = existing.sha;
-          }
-        } catch (_) { /* file doesn't exist yet, that's fine */ }
+        const { error: storageError } = await sb.storage
+          .from("product-images")
+          .upload(safeName, bytes, {
+            contentType: "image/png",
+            upsert:      true,
+          });
 
-        const ghRes = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH.split("/").map(encodeURIComponent).join("/")}`,
-          {
-            method: "PUT",
-            headers: {
-              Authorization: `token ${GITHUB_PAT}`,
-              Accept:        "application/vnd.github+json",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              message: `Add product image: ${safeName}`,
-              content: finalBase64,
-              branch:  "main",
-              ...(sha ? { sha } : {}),
-            }),
-          }
-        );
-
-        if (!ghRes.ok) {
-          const ghErr = await ghRes.text();
-          console.error("GitHub API error:", ghErr);
-          return json({ error: "GitHub upload failed: " + ghErr }, 500);
+        if (storageError) {
+          console.error("Storage error:", storageError.message, storageError);
+          return json({ error: storageError.message, details: storageError }, 500);
         }
 
-        // ── 2. Also keep a copy in Supabase Storage as backup ──
-        try {
-          await sb.storage.from("product-images").upload(safeName, finalBytes, { contentType: "image/png", upsert: true });
-        } catch (_) { /* non-fatal if backup fails */ }
-
-        // Return just the filename — shop will serve it from pdct img/ on GitHub Pages
         return json({ ok: true, filename: safeName });
-
       } catch (uploadErr) {
         console.error("uploadImage error:", String(uploadErr));
         return json({ error: String(uploadErr) }, 500);

@@ -15,9 +15,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
 const SUPABASE_URL   = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const FROM_EMAIL     = "noreply@ctxlabz.com";
-const STORE_NAME     = "CTXLabz";
-const SHOP_URL       = "https://ctxlabz.com/index.html";
+const FROM_EMAIL     = "noreply@956labs.ctxlabz.com";
+const STORE_NAME     = "956 Labs";
+const SHOP_URL       = "https://956labs.ctxlabz.com/index.html";
 
 // Days between reminders: [first, second, third, monthly...]
 const REMINDER_DELAYS = [7, 7, 30]; // after 3rd, every 30 days
@@ -78,7 +78,7 @@ serve(async (req) => {
 
       const itemRows = cartItems.map(i =>
         `<tr>
-          <td style="padding:8px 16px;border-bottom:1px solid #eee;font-size:13px;color:#222">${i.name}${i.isBundle ? " <span style='background:#CC1126;color:#fff;font-size:10px;padding:1px 5px;border-radius:2px'>BUNDLE</span>" : ""}</td>
+          <td style="padding:8px 16px;border-bottom:1px solid #eee;font-size:13px;color:#222">${i.name}${i.isBundle ? " <span style='background:#006847;color:#fff;font-size:10px;padding:1px 5px;border-radius:2px'>BUNDLE</span>" : ""}</td>
           <td style="padding:8px 16px;border-bottom:1px solid #eee;font-size:13px;color:#444;text-align:center">×${i.qty}</td>
           <td style="padding:8px 16px;border-bottom:1px solid #eee;font-size:13px;color:#111;text-align:right;font-weight:700">$${(i.price * i.qty).toFixed(2)}</td>
         </tr>`
@@ -93,11 +93,11 @@ serve(async (req) => {
 <div style="max-width:600px;margin:0 auto;background:#fff">
 
   <div style="background:#111;padding:24px 32px;display:flex;align-items:center;gap:12px">
-    <span style="font-family:'Bebas Neue',Arial,sans-serif;font-size:1.8rem;letter-spacing:.08em;color:#fff">Big<span style="color:#CC1126">Boy</span>Peps</span>
+    <span style="font-family:'Bebas Neue',Arial,sans-serif;font-size:1.8rem;letter-spacing:.08em;color:#fff">956 <span style="color:#006847">Labs</span></span>
   </div>
 
   <div style="padding:32px">
-    <p style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#CC1126;margin:0 0 8px">Your Cart</p>
+    <p style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#006847;margin:0 0 8px">Your Cart</p>
     <h2 style="font-family:Arial,sans-serif;font-size:22px;font-weight:900;color:#111;margin:0 0 16px">
       ${count === 0 ? "You left something in your cart." : count === 1 ? "Still thinking it over?" : "Your cart is still waiting."}
     </h2>
@@ -119,12 +119,12 @@ serve(async (req) => {
       <tbody>${itemRows}</tbody>
       <tfoot>
         <tr>
-          <td colspan="2" style="padding:8px 16px;font-size:12px;color:#888">Discount <span style="background:#CC1126;color:#fff;font-size:10px;padding:1px 6px;border-radius:2px;font-weight:700;letter-spacing:.06em">DYLAN10</span></td>
-          <td style="padding:8px 16px;font-size:13px;color:#CC1126;text-align:right;font-weight:700">-$${(total * 0.10).toFixed(2)}</td>
+          <td colspan="2" style="padding:8px 16px;font-size:12px;color:#888">Discount <span style="background:#006847;color:#fff;font-size:10px;padding:1px 6px;border-radius:2px;font-weight:700;letter-spacing:.06em">DYLAN10</span></td>
+          <td style="padding:8px 16px;font-size:13px;color:#006847;text-align:right;font-weight:700">-$${(total * 0.10).toFixed(2)}</td>
         </tr>
         <tr>
           <td colspan="2" style="padding:10px 16px;font-size:13px;font-weight:700;color:#111;border-top:1px solid #eee">Total with DYLAN10</td>
-          <td style="padding:10px 16px;font-size:16px;font-weight:900;color:#CC1126;text-align:right;border-top:1px solid #eee">$${(total * 0.90).toFixed(2)}</td>
+          <td style="padding:10px 16px;font-size:16px;font-weight:900;color:#006847;text-align:right;border-top:1px solid #eee">$${(total * 0.90).toFixed(2)}</td>
         </tr>
       </tfoot>
     </table>
@@ -132,17 +132,17 @@ serve(async (req) => {
   </div>
 
   <!-- CTA block — full-width background breaks Gmail signature detection -->
-  <div style="background:${row.source === '956labs' ? '#1A4FA0' : '#04090F'};padding:28px 32px;text-align:center">
-    <p style="margin:0 0 16px;font-size:13px;color:#cccccc;line-height:1.6">Ready to complete your order? Use code <strong style="color:${row.source === '956labs' ? '#ffffff' : '#CC1126'}">DYLAN10</strong> for 10% off.</p>
-    <a href="${row.source === '956labs' ? 'https://956labs.ctxlabz.com/index.html' : SHOP_URL}" style="display:inline-block;background:#CC1126;color:#ffffff;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:14px 36px;text-decoration:none;border-radius:3px">
+  <div style="background:${row.source === '956labs' ? '#006847' : '#111111'};padding:28px 32px;text-align:center">
+    <p style="margin:0 0 16px;font-size:13px;color:#cccccc;line-height:1.6">Ready to complete your order? Use code <strong style="color:${row.source === '956labs' ? '#ffffff' : '#006847'}">DYLAN10</strong> for 10% off.</p>
+    <a href="${row.source === '956labs' ? 'https://956labs.ctxlabz.com/index.html' : SHOP_URL}" style="display:inline-block;background:#006847;color:#ffffff;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:14px 36px;text-decoration:none;border-radius:3px">
       Complete My Order →
     </a>
   </div>
 
-  <div style="background:#f6f6f6;padding:16px 32px;text-align:center;border-top:1px solid #eeeeee">
+  <div style="background:#f6f6f6;padding:16px 32px;text-align:center;border-top:2px solid #CE1126">
     <p style="margin:0;font-size:11px;color:#999999;line-height:1.6">
       For research purposes only &middot; Not for human consumption<br>
-      <a href="https://ctxlabz.com/index.html?unsubscribe=${row.user_id}" style="color:#bbbbbb;text-decoration:underline">Unsubscribe</a>
+      <a href="https://utqviljholfvpfztfuvx.supabase.co/functions/v1/unsubscribe?uid=${row.user_id}" style="color:#bbbbbb;text-decoration:underline">Unsubscribe</a>
     </p>
   </div>
 

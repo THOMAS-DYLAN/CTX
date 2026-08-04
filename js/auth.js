@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// CTXLabz — Auth & User Data (Supabase)
+// 956 Labs — Auth & User Data (Supabase)
 // ═══════════════════════════════════════════════════════════════
 
 import { supabase } from './supabase.js';
@@ -74,8 +74,8 @@ window.Auth = {
       email,
       password,
       options: {
-        data: { first_name: firstName, last_name: lastName, source: 'bbp' },
-        emailRedirectTo: 'https://ctxlabz.com/dashboard.html',
+        data: { first_name: firstName, last_name: lastName, source: '956labs' },
+        emailRedirectTo: 'https://956labs.ctxlabz.com/dashboard.html',
       }
     });
 
@@ -87,15 +87,14 @@ window.Auth = {
   },
 
   // ── Source stamping ─────────────────────────────────────────
-  // Only stamps 'bbp' if user isn't already '956labs' — never downgrades.
+  // 956labs always wins — stamps '956labs' unconditionally.
   // Accepts an optional userOverride to avoid session cache race on login.
   async stampSource(userOverride = null) {
     try {
       const user = userOverride || await this.getUser();
       if (!user) return;
-      if (user.user_metadata?.source === '956labs') return; // never downgrade
-      if (user.user_metadata?.source === 'bbp') return;     // already set
-      await supabase.auth.updateUser({ data: { ...user.user_metadata, source: 'bbp' } });
+      if (user.user_metadata?.source === '956labs') return; // already set
+      await supabase.auth.updateUser({ data: { ...user.user_metadata, source: '956labs' } });
     } catch(e) { /* non-critical */ }
   },
 
@@ -116,7 +115,7 @@ window.Auth = {
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
-      options: { emailRedirectTo: 'https://ctxlabz.com/dashboard.html' },
+      options: { emailRedirectTo: 'https://956labs.ctxlabz.com/dashboard.html' },
     });
     return error ? { ok: false, err: error.message } : { ok: true };
   },
@@ -232,7 +231,6 @@ window.Auth = {
       qty
     });
     return error ? { ok: false } : { ok: true };
-    return orderRow?.id || null;
   },
 
   async incrementInventory(productId, qty) {
@@ -285,10 +283,11 @@ window.Auth = {
       cashapp_cashtag: order.cashapp_cashtag || null,
       paypal_email:    order.paypal_email    || null,
       paypal_name:     order.paypal_name     || null,
-      discount_code:   order.discount_code  || null,
+      zelle_handle:    order.zelle_handle    || null,
+      bitcoin_handle:  order.bitcoin_handle  || null,
       discount_code:   order.discount_code  || null,
       discount_pct:    order.discount_pct   || null,
-      source_site:     order.source_site     || 'bbp',
+      source_site:     order.source_site     || '956labs',
     }).select('id').single();
 
     if (!order.skipInventory) {
@@ -415,7 +414,7 @@ window.Auth = {
 
     if (existing) return { ok: false, err: 'already_on_waitlist' };
 
-    // Stamp source on waitlist join
+    // Stamp 956labs source on waitlist join
     this.stampSource();
 
     // Insert waitlist row
@@ -435,8 +434,8 @@ window.Auth = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         access_key: '8eec27a9-6e50-4206-a71a-a2c6f0c4c8bb',
-        subject:    'CTXLabz Waitlist — ' + productName,
-        from_name:  'CTXLabz',
+        subject:    '956 Labs Waitlist — ' + productName,
+        from_name:  '956 Labs',
         to:         'Brandon.burnell@hotmail.com',
         message:    'New waitlist signup:\nProduct: ' + productName + '\nEmail: ' + user.email,
       })

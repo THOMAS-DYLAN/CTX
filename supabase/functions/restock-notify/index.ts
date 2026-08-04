@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// CTXLabz — Restock Notify Edge Function
+// 956 Labs — Restock Notify Edge Function
 // Supabase Edge Function (Deno runtime)
 // ═══════════════════════════════════════════════════════════════
 
@@ -10,7 +10,7 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const FROM_EMAIL = 'noreply@ctxlabz.com';
+const FROM_EMAIL = 'noreply@956labs.ctxlabz.com';
 
 // Types
 interface ProductRow {
@@ -79,9 +79,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: FROM_EMAIL,
+            from: `956 Labs <${FROM_EMAIL}>`,
             to: entry.email,
-            subject: `${productName} is back in stock — CTXLabz`,
+            subject: `${productName} is back in stock — 956 Labs`,
             html: buildEmail(
               entry.name?.trim() || 'there',
               productName
@@ -162,16 +162,16 @@ function buildEmail(
         <table width="560" cellpadding="0" cellspacing="0" style="background:#141414;border:1px solid #2a2a2a;max-width:560px;width:100%;">
 
           <tr>
-            <td style="background:#CC1F1F;padding:24px 36px;">
+            <td style="background:#006847;padding:24px 36px;">
               <p style="margin:0;font-size:22px;font-weight:900;letter-spacing:4px;text-transform:uppercase;color:#fff;">
-                BIGBOYPEPS
+                956 LABS
               </p>
             </td>
           </tr>
 
           <tr>
             <td style="padding:36px;">
-              <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:#CC1F1F;">
+              <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:#CE1126;">
                 Back In Stock
               </p>
 
@@ -187,7 +187,7 @@ function buildEmail(
               <table cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="background:#CC1F1F;">
-                    <a href="https://ctxlabz.com/shop.html"
+                    <a href="https://956labs.ctxlabz.com/index.html"
                       style="display:inline-block;padding:14px 32px;font-size:12px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#ffffff;text-decoration:none;">
                       Shop Now →
                     </a>

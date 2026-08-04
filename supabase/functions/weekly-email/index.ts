@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 // Weekly Email — Unified Supabase Edge Function
 // Sends branded weekly update to each user based on their
-// signup source (bbp → CTXLabz email, 956labs → 956 Labs email).
+// signup source (bbp → BigBoyPeps email, 956labs → 956 Labs email).
 // Falls back to order history, then defaults to bbp.
 //
 // Deploy: supabase functions deploy weekly-email --no-verify-jwt
@@ -33,17 +33,17 @@ const BRANDS: Record<string, {
     name:        "CTXLabz",
     from:        "noreply@ctxlabz.com",
     shopUrl:     "https://ctxlabz.com/shop.html",
-    unsubBase:   "https://ctxlabz.com/supabase/functions/v1/unsubscribe",
+    unsubBase:   "https://utqviljholfvpfztfuvx.supabase.co/functions/v1/unsubscribe",
     headerBg:    "#1A4FA0",
     accentBg:    "#CC1126",
   },
   "956labs": {
     name:        "956 Labs",
-    from:        "noreply@ctxlabz.com",
+    from:        "noreply@956labs.ctxlabz.com",
     shopUrl:     "https://956labs.ctxlabz.com/index.html",
     unsubBase:   "https://utqviljholfvpfztfuvx.supabase.co/functions/v1/unsubscribe",
-    headerBg:    "#1A4FA0",
-    accentBg:    "#CC1126",
+    headerBg:    "#006847",
+    accentBg:    "#CE1126",
   },
 };
 
@@ -127,13 +127,13 @@ serve(async (req) => {
       `<tr>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;color:#222">${p.name}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;color:#444;text-align:right">$${p.price.toFixed(2)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;color:${p.inventory <= 5 ? '#CC1126' : '#1A4FA0'};text-align:right;font-weight:700">${p.inventory} left</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;color:${p.inventory <= 5 ? '#CE1126' : '#006847'};text-align:right;font-weight:700">${p.inventory} left</td>
       </tr>`;
 
     const bundleRow = (p: { name: string; bundle_price: number; inventory: number }) =>
       `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;color:#222">${p.name} <span style="background:#1A4FA0;color:#fff;font-size:10px;padding:2px 6px;border-radius:2px;margin-left:6px">Bundle ×10</span></td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;color:#1A4FA0;text-align:right;font-weight:700">$${p.bundle_price.toFixed(2)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;color:#222">${p.name} <span style="background:#006847;color:#fff;font-size:10px;padding:2px 6px;border-radius:2px;margin-left:6px">Bundle ×10</span></td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;color:#006847;text-align:right;font-weight:700">$${p.bundle_price.toFixed(2)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;color:#444;text-align:right">${Math.floor(p.inventory / 10)} bundles</td>
       </tr>`;
 
@@ -165,7 +165,7 @@ serve(async (req) => {
 
       ${inStock.length ? `
       <!-- In Stock -->
-      <h2 style="font-family:Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#1A4FA0;border-bottom:2px solid #1A4FA0;padding-bottom:6px;margin-top:24px">
+      <h2 style="font-family:Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#006847;border-bottom:2px solid #006847;padding-bottom:6px;margin-top:24px">
         In Stock (${inStock.length} products)
       </h2>
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #eee">
@@ -183,7 +183,7 @@ serve(async (req) => {
 
       ${bundles.length ? `
       <!-- Bundles -->
-      <h2 style="font-family:Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#CC1126;border-bottom:2px solid #CC1126;padding-bottom:6px;margin-top:28px">
+      <h2 style="font-family:Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#CE1126;border-bottom:2px solid #CE1126;padding-bottom:6px;margin-top:28px">
         Bundle Deals
       </h2>
       <p style="font-size:13px;color:#666;margin-top:4px;margin-bottom:12px">Save big with bundles of 10 vials at a discounted rate.</p>
@@ -202,8 +202,8 @@ serve(async (req) => {
 
       ${lowStock.length ? `
       <!-- Low Stock Alert -->
-      <div style="margin-top:24px;background:#fff5f5;border:1px solid #ffcccc;border-left:3px solid #CC1126;padding:12px 16px;border-radius:2px">
-        <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#CC1126">⚠ Low Stock Alert</p>
+      <div style="margin-top:24px;background:#fff5f5;border:1px solid #ffcccc;border-left:3px solid #CE1126;padding:12px 16px;border-radius:2px">
+        <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#CE1126">⚠ Low Stock Alert</p>
         <p style="margin:6px 0 0;font-size:13px;color:#444">${lowStock.map(p => p.name).join(", ")} — order soon before they sell out.</p>
       </div>` : ""}
 
@@ -215,7 +215,7 @@ serve(async (req) => {
 
       <!-- CTA -->
       <div style="text-align:center;margin-top:32px">
-        <a href="${brand.shopUrl}" style="display:inline-block;background:#1A4FA0;color:#fff;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:14px 32px;text-decoration:none;border-radius:3px">
+        <a href="${brand.shopUrl}" style="display:inline-block;background:#006847;color:#fff;font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:14px 32px;text-decoration:none;border-radius:3px">
           Shop Now →
         </a>
       </div>
