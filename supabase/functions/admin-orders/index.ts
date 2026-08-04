@@ -86,18 +86,22 @@ serve(async (req) => {
       const { name, category, price, bundle_price, inventory, potency, description, images, publish_at } = body;
       if (!name || price === undefined) return json({ error: "Missing name or price" }, 400);
 
-      const insertPayload = {
+      const insertPayload: Record<string, unknown> = {
         name,
         category:     category ? category.trim() : "Peptides",
-        publish_at:   publish_at || null,
-        active:       publish_at ? new Date(publish_at) > new Date() ? false : true : true,
         price:        Number(price),
         bundle_price: bundle_price ? Number(bundle_price) : null,
         inventory:    Number(inventory) || 0,
         potency:      Number(potency)   || 3,
         description:  description       || null,
         images:       images            || null,
+        active:       true,
       };
+      // Only set publish_at / active scheduling if a date was provided
+      if (publish_at) {
+        insertPayload.publish_at = publish_at;
+        insertPayload.active     = new Date(publish_at) > new Date() ? false : true;
+      }
 
       console.log("addProduct payload:", JSON.stringify(insertPayload));
 
