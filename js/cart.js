@@ -829,13 +829,20 @@ async function mountPayPal() {
       onApprove: async function(data, actions) {
         clearCheckoutError();
         var shippingData = _pendingShipping || captureShipping();
-        container.innerHTML = '<p style="font-family:var(--font-c);font-size:.68rem;text-align:center;color:var(--smoke);padding:12px 0">Processing payment…</p>';
+        // Do NOT touch container.innerHTML here — it holds the PayPal
+        // iframe/window that actions.order.capture() still needs to
+        // talk to via postRobot. Wiping it now causes:
+        // "Can not send postrobot_method. Target window is closed."
+        showCheckoutError('Processing payment…');
         try {
           var captureResult = await actions.order.capture();
           var payerEmail = captureResult?.payer?.email_address || '';
           var payerName  = (captureResult?.payer?.name?.given_name || '') + ' ' + (captureResult?.payer?.name?.surname || '');
           shippingData.paypal_email = payerEmail.trim();
           shippingData.paypal_name  = payerName.trim();
+          clearCheckoutError();
+          // Safe to update the container now — capture() has resolved.
+          container.innerHTML = '<p style="font-family:var(--font-c);font-size:.68rem;text-align:center;color:var(--smoke);padding:12px 0">Finalizing order…</p>';
           await finishOrder(shippingData);
         } catch(captureErr) {
           showCheckoutError('Payment capture failed — ' + (captureErr.message || 'please try again.'));
