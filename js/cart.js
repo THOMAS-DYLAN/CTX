@@ -692,6 +692,7 @@ function renderCheckoutModal(items, profile, addr) {
     + '<div class="modal-section">'
     + '<div class="modal-section-title">Payment Method</div>'
     + '<div id="paypal-button-container"></div>'
+    + '<div id="paylater-button-container" style="margin-top:8px"></div>'
     + '<div id="cashapp-container" style="margin-top:10px"></div>'
     + '</div>'
 
@@ -790,10 +791,14 @@ async function mountPayPal() {
     var discountAmt = discount ? Math.round(subtotal * discount.pct) / 100 : 0;
     var total       = Math.max(0.01, subtotal + ship - discountAmt).toFixed(2);
 
-    var buttons = window.paypal.Buttons({
-      style: { layout:'vertical', color:'blue', shape:'rect', label:'pay', height:48 },
+    var _ppHandlers = {
+      onClick: null, createOrder: null, onApprove: null, onError: null, onCancel: null
+    };
 
-      onClick: function(data, actions) {
+    var buttons = window.paypal.Buttons({
+      style: { layout:'vertical', color:'blue', shape:'rect', label:'paypal', height:48 },
+
+      onClick: _ppHandlers.onClick = function(data, actions) {
         clearCheckoutError();
         if (!shippingValid()) {
           var LABELS = {
@@ -819,14 +824,14 @@ async function mountPayPal() {
         return actions.resolve();
       },
 
-      createOrder: function(data, actions) {
+      createOrder: _ppHandlers.createOrder = function(data, actions) {
         return actions.order.create({
           intent: 'CAPTURE',
           purchase_units: [{ amount: { value: total, currency_code: 'USD' } }],
         });
       },
 
-      onApprove: async function(data, actions) {
+      onApprove: _ppHandlers.onApprove = async function(data, actions) {
         clearCheckoutError();
         var shippingData = _pendingShipping || captureShipping();
         // Do NOT touch container.innerHTML here — it holds the PayPal
@@ -851,20 +856,39 @@ async function mountPayPal() {
         }
       },
 
-      onError: function(err) {
+      onError: _ppHandlers.onError = function(err) {
         console.error('PayPal error:', err);
         showCheckoutError('Payment failed — please try again or use a different payment method.');
         container.innerHTML = '';
         mountPayPal();
       },
 
-      onCancel: function() {},
+      onCancel: _ppHandlers.onCancel = function() {},
     });
 
     if (buttons.isEligible()) {
       await buttons.render('#paypal-button-container');
     } else {
       container.innerHTML = '<p style="color:var(--smoke);font-size:.72rem;text-align:center;font-style:italic;padding:12px 0">PayPal unavailable — please use card.</p>';
+    }
+
+    // Render Pay Later button explicitly — skip isEligible, let PayPal decide
+    try {
+      var plContainer = document.getElementById('paylater-button-container');
+      if (plContainer) {
+        var plBtn = window.paypal.Buttons({
+          fundingSource: window.paypal.FUNDING.PAYLATER,
+          style: { layout:'vertical', color:'gold', shape:'rect', label:'paypal', height:48 },
+          onClick:     _ppHandlers.onClick,
+          createOrder: _ppHandlers.createOrder,
+          onApprove:   _ppHandlers.onApprove,
+          onError:     _ppHandlers.onError,
+          onCancel:    _ppHandlers.onCancel,
+        });
+        await plBtn.render('#paylater-button-container');
+      }
+    } catch(plErr) {
+      console.warn('Pay Later unavailable for this account/region:', plErr.message || plErr);
     }
 
   } catch(err) {
