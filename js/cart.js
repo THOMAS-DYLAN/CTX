@@ -886,7 +886,7 @@ async function mountPayPal() {
       if (plContainer && window.paypal.FUNDING && window.paypal.FUNDING.PAYLATER) {
         var plBtn = window.paypal.Buttons({
           fundingSource: window.paypal.FUNDING.PAYLATER,
-          style: { layout:'vertical', color:'gold', shape:'rect', label:'paylater', height:48 },
+          style: { layout:'vertical', color:'gold', shape:'rect', height:48 },
           message: { amount: Number(total), align: 'center' },
           onClick:     _ppHandlers.onClick,
           createOrder: _ppHandlers.createOrder,
