@@ -692,6 +692,7 @@ function renderCheckoutModal(items, profile, addr) {
     + '<div class="modal-section">'
     + '<div class="modal-section-title">Payment Method</div>'
     + '<div id="paypal-button-container"></div>'
+    + '<div id="venmo-button-container" style="margin-top:8px"></div>'
     + '<div id="paylater-message-container" style="margin-top:10px;text-align:center"></div>'
     + '<div id="paylater-button-container" style="margin-top:8px"></div>'
     + '<div id="cashapp-container" style="margin-top:10px"></div>'
@@ -784,8 +785,10 @@ async function mountPayPal() {
     }
 
     container.innerHTML = '';
+    var venmoContainer = document.getElementById('venmo-button-container');
     var payLaterContainer = document.getElementById('paylater-button-container');
     var payLaterMessageContainer = document.getElementById('paylater-message-container');
+    if (venmoContainer) venmoContainer.innerHTML = '';
     if (payLaterContainer) payLaterContainer.innerHTML = '';
     if (payLaterMessageContainer) payLaterMessageContainer.innerHTML = '';
 
@@ -875,6 +878,34 @@ async function mountPayPal() {
       await buttons.render('#paypal-button-container');
     } else {
       container.innerHTML = '<p style="color:var(--smoke);font-size:.72rem;text-align:center;font-style:italic;padding:12px 0">PayPal unavailable — please use card.</p>';
+    }
+
+    // Render Venmo explicitly as its own funding button so adding Pay Later
+    // cannot cause Venmo to disappear from the checkout layout. PayPal still
+    // controls eligibility for the current buyer/device/account.
+    try {
+      var venmoBtnContainer = document.getElementById('venmo-button-container');
+      if (venmoBtnContainer && window.paypal.FUNDING && window.paypal.FUNDING.VENMO) {
+        var venmoBtn = window.paypal.Buttons({
+          fundingSource: window.paypal.FUNDING.VENMO,
+          style: { layout:'vertical', shape:'rect', label:'venmo', height:48 },
+          onClick: _ppHandlers.onClick,
+          createOrder: _ppHandlers.createOrder,
+          onApprove: _ppHandlers.onApprove,
+          onError: _ppHandlers.onError,
+          onCancel: _ppHandlers.onCancel,
+        });
+        if (venmoBtn.isEligible()) {
+          await venmoBtn.render(venmoBtnContainer);
+        } else {
+          venmoBtnContainer.innerHTML = '';
+          console.info('PayPal Venmo is not eligible for this checkout.');
+        }
+      }
+    } catch(venmoErr) {
+      console.warn('Venmo unavailable for this account/device:', venmoErr.message || venmoErr);
+      var failedVenmo = document.getElementById('venmo-button-container');
+      if (failedVenmo) failedVenmo.innerHTML = '';
     }
 
     // Render a separate Pay Later button only when PayPal says this
