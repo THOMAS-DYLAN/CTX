@@ -692,8 +692,6 @@ function renderCheckoutModal(items, profile, addr) {
     + '<div class="modal-section">'
     + '<div class="modal-section-title">Payment Method</div>'
     + '<div id="paypal-button-container"></div>'
-    + '<div id="venmo-button-container" style="margin-top:8px"></div>'
-    + '<div id="paylater-message-container" style="margin-top:10px;text-align:center"></div>'
     + '<div id="paylater-button-container" style="margin-top:8px"></div>'
     + '<div id="cashapp-container" style="margin-top:10px"></div>'
     + '</div>'
@@ -777,7 +775,7 @@ async function mountPayPal() {
         var existing = document.querySelector('script[src*="paypal.com/sdk"]');
         if (existing) existing.remove();
         var script = document.createElement('script');
-        script.src = 'https://www.paypal.com/sdk/js?client-id=' + PAYPAL_CLIENT_ID + '&currency=USD&intent=capture&components=buttons,funding-eligibility,messages&enable-funding=card,venmo,paylater&disable-funding=credit';
+        script.src = 'https://www.paypal.com/sdk/js?client-id=' + PAYPAL_CLIENT_ID + '&currency=USD&intent=capture&components=buttons&enable-funding=card,venmo,paylater&disable-funding=credit';
         script.onload  = resolve;
         script.onerror = function() { reject(new Error('PayPal SDK failed to load')); };
         document.head.appendChild(script);
@@ -785,12 +783,6 @@ async function mountPayPal() {
     }
 
     container.innerHTML = '';
-    var venmoContainer = document.getElementById('venmo-button-container');
-    var payLaterContainer = document.getElementById('paylater-button-container');
-    var payLaterMessageContainer = document.getElementById('paylater-message-container');
-    if (venmoContainer) venmoContainer.innerHTML = '';
-    if (payLaterContainer) payLaterContainer.innerHTML = '';
-    if (payLaterMessageContainer) payLaterMessageContainer.innerHTML = '';
 
     var items       = Cart.get();
     var subtotal    = items.reduce(function(s,i) { return s + (Number(i.price)||0) * (Number(i.qty)||1); }, 0);
@@ -799,14 +791,10 @@ async function mountPayPal() {
     var discountAmt = discount ? Math.round(subtotal * discount.pct) / 100 : 0;
     var total       = Math.max(0.01, subtotal + ship - discountAmt).toFixed(2);
 
-    var _ppHandlers = {
-      onClick: null, createOrder: null, onApprove: null, onError: null, onCancel: null
-    };
-
     var buttons = window.paypal.Buttons({
       style: { layout:'vertical', color:'blue', shape:'rect', label:'paypal', height:48 },
 
-      onClick: _ppHandlers.onClick = function(data, actions) {
+      onClick: function(data, actions) {
         clearCheckoutError();
         if (!shippingValid()) {
           var LABELS = {
@@ -832,14 +820,14 @@ async function mountPayPal() {
         return actions.resolve();
       },
 
-      createOrder: _ppHandlers.createOrder = function(data, actions) {
+      createOrder: function(data, actions) {
         return actions.order.create({
           intent: 'CAPTURE',
           purchase_units: [{ amount: { value: total, currency_code: 'USD' } }],
         });
       },
 
-      onApprove: _ppHandlers.onApprove = async function(data, actions) {
+      onApprove: async function(data, actions) {
         clearCheckoutError();
         var shippingData = _pendingShipping || captureShipping();
         // Do NOT touch container.innerHTML here — it holds the PayPal
@@ -864,14 +852,14 @@ async function mountPayPal() {
         }
       },
 
-      onError: _ppHandlers.onError = function(err) {
+      onError: function(err) {
         console.error('PayPal error:', err);
         showCheckoutError('Payment failed — please try again or use a different payment method.');
         container.innerHTML = '';
         mountPayPal();
       },
 
-      onCancel: _ppHandlers.onCancel = function() {},
+      onCancel: function() {},
     });
 
     if (buttons.isEligible()) {
@@ -880,78 +868,22 @@ async function mountPayPal() {
       container.innerHTML = '<p style="color:var(--smoke);font-size:.72rem;text-align:center;font-style:italic;padding:12px 0">PayPal unavailable — please use card.</p>';
     }
 
-    // Render Venmo explicitly as its own funding button so adding Pay Later
-    // cannot cause Venmo to disappear from the checkout layout. PayPal still
-    // controls eligibility for the current buyer/device/account.
+    // Render Pay Later button explicitly
     try {
-      var venmoBtnContainer = document.getElementById('venmo-button-container');
-      if (venmoBtnContainer && window.paypal.FUNDING && window.paypal.FUNDING.VENMO) {
-        var venmoBtn = window.paypal.Buttons({
-          fundingSource: window.paypal.FUNDING.VENMO,
-          style: { layout:'vertical', shape:'rect', label:'venmo', height:48 },
-          onClick: _ppHandlers.onClick,
-          createOrder: _ppHandlers.createOrder,
-          onApprove: _ppHandlers.onApprove,
-          onError: _ppHandlers.onError,
-          onCancel: _ppHandlers.onCancel,
-        });
-        if (venmoBtn.isEligible()) {
-          await venmoBtn.render(venmoBtnContainer);
-        } else {
-          venmoBtnContainer.innerHTML = '';
-          console.info('PayPal Venmo is not eligible for this checkout.');
-        }
-      }
-    } catch(venmoErr) {
-      console.warn('Venmo unavailable for this account/device:', venmoErr.message || venmoErr);
-      var failedVenmo = document.getElementById('venmo-button-container');
-      if (failedVenmo) failedVenmo.innerHTML = '';
-    }
-
-    // Render a separate Pay Later button only when PayPal says this
-    // funding source is eligible. PayPal's current v5 standalone-button
-    // guidance requires funding-eligibility + isEligible() for this pattern.
-    try {
-      var plContainer = document.getElementById('paylater-button-container');
-      var plMessageContainer = document.getElementById('paylater-message-container');
-      if (plContainer && window.paypal.FUNDING && window.paypal.FUNDING.PAYLATER) {
-        var plBtn = window.paypal.Buttons({
-          fundingSource: window.paypal.FUNDING.PAYLATER,
-          style: { layout:'vertical', color:'gold', shape:'rect', height:48 },
-          message: { amount: Number(total), align: 'center' },
-          onClick:     _ppHandlers.onClick,
-          createOrder: _ppHandlers.createOrder,
-          onApprove:   _ppHandlers.onApprove,
-          onError:     _ppHandlers.onError,
-          onCancel:    _ppHandlers.onCancel,
-        });
-
-        if (plBtn.isEligible()) {
-          if (plMessageContainer && window.paypal.Messages) {
-            await window.paypal.Messages({
-              amount: Number(total),
-              pageType: 'checkout',
-              contextualComponents: 'PAY_LATER_BUTTON',
-              style: {
-                layout: 'text',
-                logo: { type: 'inline' },
-                text: { align: 'center' }
-              }
-            }).render(plMessageContainer);
-          }
-          await plBtn.render(plContainer);
-        } else {
-          plContainer.innerHTML = '';
-          if (plMessageContainer) plMessageContainer.innerHTML = '';
-          console.info('PayPal Pay Later is not eligible for this checkout.');
-        }
+      var plBtn = window.paypal.Buttons({
+        fundingSource: window.paypal.FUNDING.PAYLATER,
+        style: { layout:'vertical', color:'gold', shape:'rect', height:48 },
+        onClick:     buttons.props.onClick,
+        createOrder: buttons.props.createOrder,
+        onApprove:   buttons.props.onApprove,
+        onError:     buttons.props.onError,
+        onCancel:    buttons.props.onCancel,
+      });
+      if (plBtn.isEligible()) {
+        await plBtn.render('#paylater-button-container');
       }
     } catch(plErr) {
-      console.warn('Pay Later unavailable for this account/region:', plErr.message || plErr);
-      var failedPL = document.getElementById('paylater-button-container');
-      var failedMsg = document.getElementById('paylater-message-container');
-      if (failedPL) failedPL.innerHTML = '';
-      if (failedMsg) failedMsg.innerHTML = '';
+      console.warn('Pay Later button unavailable:', plErr);
     }
 
   } catch(err) {
