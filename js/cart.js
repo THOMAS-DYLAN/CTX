@@ -872,10 +872,15 @@ async function mountPayPal() {
       container.innerHTML = '<p style="color:var(--smoke);font-size:.72rem;text-align:center;font-style:italic;padding:12px 0">PayPal unavailable — please use card.</p>';
     }
 
-    // Render Pay Later button explicitly — skip isEligible, let PayPal decide
+    // Render the standalone Pay Later button only when PayPal says it is eligible.
+    // PayPal's v5 documentation recommends isEligible() for standalone funding-source buttons.
     try {
       var plContainer = document.getElementById('paylater-button-container');
-      if (plContainer) {
+      if (plContainer && window.paypal.FUNDING && window.paypal.FUNDING.PAYLATER) {
+        // mountPayPal() can be called again after shipping/discount changes, so clear any
+        // previous Pay Later iframe before attempting to render a new one.
+        plContainer.innerHTML = '';
+
         var plBtn = window.paypal.Buttons({
           fundingSource: window.paypal.FUNDING.PAYLATER,
           style: { layout:'vertical', color:'gold', shape:'rect', label:'paypal', height:48 },
@@ -885,10 +890,15 @@ async function mountPayPal() {
           onError:     _ppHandlers.onError,
           onCancel:    _ppHandlers.onCancel,
         });
-        await plBtn.render('#paylater-button-container');
+
+        if (plBtn.isEligible()) {
+          await plBtn.render('#paylater-button-container');
+        }
       }
     } catch(plErr) {
       console.warn('Pay Later unavailable for this account/region:', plErr.message || plErr);
+      var plContainerErr = document.getElementById('paylater-button-container');
+      if (plContainerErr) plContainerErr.innerHTML = '';
     }
 
   } catch(err) {
