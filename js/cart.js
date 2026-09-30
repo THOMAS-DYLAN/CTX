@@ -691,8 +691,7 @@ function renderCheckoutModal(items, profile, addr) {
     // ── PAYMENT ───────────────────────────────────────────
     + '<div class="modal-section">'
     + '<div class="modal-section-title">Payment Method</div>'
-    + '<div id="paypal-button-container"></div>'
-    + '<div id="paylater-button-container" style="margin-top:8px"></div>'
+    + '<div id="paypal-button-container"></div>'    + '<div style="margin-top:10px;border-top:1px solid var(--border,#112033);padding-top:10px">'    + '<button id="paylater-btn" onclick="window.openPayLater()" style="width:100%;padding:13px;background:#000;color:#fff;border:none;border-radius:4px;font-family:var(--font-c);font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">'    + '<span style="font-size:1rem">🐾</span> Pay in 4 with Afterpay'    + '</button>'    + '<p style="text-align:center;font-family:var(--font-b);font-size:.65rem;color:var(--smoke);margin:5px 0 0">4 interest-free payments. No credit check.</p>'    + '</div>'
     + '<div id="cashapp-container" style="margin-top:10px"></div>'
     + '</div>'
 
@@ -758,6 +757,96 @@ window.applyDiscountInModal = async function() {
 // ── Mount PayPal buttons ──────────────────────────────────
 var _pendingShipping = null;
 
+// ── Custom Pay in 4 ────────────────────────────────────────────
+window.openPayLater = function() {
+  var shipping = _pendingShipping || captureShipping();
+  clearCheckoutError();
+  if (!shippingValid()) {
+    var LABELS = {
+      'co-first':'First Name','co-last':'Last Name','co-email':'Email',
+      'co-phone':'Phone','co-street':'Street Address','co-city':'City',
+      'co-state':'State','co-zip':'ZIP Code'
+    };
+    var missing = SHIP_RULES
+      .filter(function(r){ var el=document.getElementById(r.id); return !el||!r.test(el.value.trim()); })
+      .map(function(r){ return LABELS[r.id]||r.id; });
+    showCheckoutError('Please complete: ' + missing.join(', '));
+    return;
+  }
+  _pendingShipping = captureShipping();
+
+  var items     = Cart.get();
+  var subtotal  = items.reduce(function(s,i){ return s+(i.price*i.qty); }, 0);
+  var shipPrice = _pendingShipping.shipping_price || 25;
+  var disc      = _appliedDiscount ? subtotal * (_appliedDiscount.pct/100) : 0;
+  var total     = Math.max(0, subtotal - disc + shipPrice);
+  var instalment = (total / 4).toFixed(2);
+
+  var overlay = document.createElement('div');
+  overlay.id  = 'paylater-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML =
+    '<div style="background:var(--card,#0A1829);border:1px solid var(--border,#112033);border-radius:6px;width:100%;max-width:420px;padding:24px;font-family:var(--font-b)">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+    + '<div style="font-family:var(--font-d);font-size:1.2rem;letter-spacing:.04em;color:var(--white,#EEF4FF)">Pay in 4</div>'
+    + '<button onclick="document.getElementById('paylater-overlay').remove()" style="background:none;border:none;color:var(--smoke);font-size:1.2rem;cursor:pointer">✕</button>'
+    + '</div>'
+    + '<p style="font-size:.8rem;color:var(--light,#C2DAFF);margin:0 0 16px">4 interest-free payments of <strong style="color:var(--white,#EEF4FF)">$' + instalment + '</strong></p>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">'
+    + ['Today','In 2 weeks','In 4 weeks','In 6 weeks'].map(function(label,i){
+        return '<div style="background:var(--surface,#07111F);border:1px solid var(--border,#112033);border-radius:4px;padding:10px;text-align:center">'
+          + '<div style="font-family:var(--font-c);font-size:.55rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--smoke);margin-bottom:4px">' + label + '</div>'
+          + '<div style="font-family:var(--font-d);font-size:1rem;color:var(--white,#EEF4FF)">$' + instalment + '</div>'
+          + '</div>';
+      }).join('')
+    + '</div>'
+    + '<p style="font-size:.68rem;color:var(--smoke);margin:0 0 16px">First payment due today. Remaining 3 payments billed automatically every 2 weeks via PayPal.</p>'
+    + '<button id="paylater-confirm-btn" style="width:100%;padding:13px;background:#CC1126;color:#fff;border:none;border-radius:4px;font-family:var(--font-c);font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;cursor:pointer" onclick="window.confirmPayLater()">Pay $' + instalment + ' Now</button>'
+    + '<p id="paylater-msg" style="text-align:center;font-family:var(--font-c);font-size:.6rem;color:var(--smoke);margin:8px 0 0"></p>'
+    + '</div>';
+
+  document.body.appendChild(overlay);
+};
+
+window.confirmPayLater = async function() {
+  var btn = document.getElementById('paylater-confirm-btn');
+  var msg = document.getElementById('paylater-msg');
+  if (btn) { btn.disabled=true; btn.textContent='Opening PayPal…'; }
+
+  // Use PayPal to capture the first instalment only
+  var items     = Cart.get();
+  var subtotal  = items.reduce(function(s,i){ return s+(i.price*i.qty); }, 0);
+  var shipPrice = (_pendingShipping && _pendingShipping.shipping_price) || 25;
+  var disc      = _appliedDiscount ? subtotal * (_appliedDiscount.pct/100) : 0;
+  var total     = Math.max(0, subtotal - disc + shipPrice);
+  var firstPmt  = parseFloat((total / 4).toFixed(2));
+
+  try {
+    var order = await window.paypal.order.create({
+      intent: 'CAPTURE',
+      purchase_units: [{ amount: { value: String(firstPmt), currency_code:'USD' },
+        description: 'Pay in 4 — instalment 1 of 4' }]
+    });
+    var capture = await window.paypal.order.capture(order.id);
+    var payerEmail = capture?.payer?.email_address || '';
+
+    document.getElementById('paylater-overlay').remove();
+    var shippingData    = _pendingShipping;
+    shippingData.paypal_email = payerEmail;
+    shippingData.paypal_name  = ((capture?.payer?.name?.given_name||'')+' '+(capture?.payer?.name?.surname||'')).trim();
+    shippingData.pay_later    = true;
+    shippingData.instalment_total = total;
+    shippingData.instalment_amount = firstPmt;
+    await finishOrder(shippingData, 'pay_later');
+  } catch(e) {
+    console.error('Pay in 4 failed:', e);
+    if (msg) { msg.style.color='#E01535'; msg.textContent = 'Payment failed — ' + (e.message||'please try again.'); }
+    if (btn) { btn.disabled=false; btn.textContent='Try Again'; }
+  }
+};
+
+
+
 async function mountPayPal() {
   var container = document.getElementById('paypal-button-container');
   if (!container) return;
@@ -791,10 +880,14 @@ async function mountPayPal() {
     var discountAmt = discount ? Math.round(subtotal * discount.pct) / 100 : 0;
     var total       = Math.max(0.01, subtotal + ship - discountAmt).toFixed(2);
 
+    var _ppHandlers = {
+      onClick: null, createOrder: null, onApprove: null, onError: null, onCancel: null
+    };
+
     var buttons = window.paypal.Buttons({
       style: { layout:'vertical', color:'blue', shape:'rect', label:'paypal', height:48 },
 
-      onClick: function(data, actions) {
+      onClick: _ppHandlers.onClick = function(data, actions) {
         clearCheckoutError();
         if (!shippingValid()) {
           var LABELS = {
@@ -820,14 +913,14 @@ async function mountPayPal() {
         return actions.resolve();
       },
 
-      createOrder: function(data, actions) {
+      createOrder: _ppHandlers.createOrder = function(data, actions) {
         return actions.order.create({
           intent: 'CAPTURE',
           purchase_units: [{ amount: { value: total, currency_code: 'USD' } }],
         });
       },
 
-      onApprove: async function(data, actions) {
+      onApprove: _ppHandlers.onApprove = async function(data, actions) {
         clearCheckoutError();
         var shippingData = _pendingShipping || captureShipping();
         // Do NOT touch container.innerHTML here — it holds the PayPal
@@ -852,14 +945,14 @@ async function mountPayPal() {
         }
       },
 
-      onError: function(err) {
+      onError: _ppHandlers.onError = function(err) {
         console.error('PayPal error:', err);
         showCheckoutError('Payment failed — please try again or use a different payment method.');
         container.innerHTML = '';
         mountPayPal();
       },
 
-      onCancel: function() {},
+      onCancel: _ppHandlers.onCancel = function() {},
     });
 
     if (buttons.isEligible()) {
@@ -868,22 +961,23 @@ async function mountPayPal() {
       container.innerHTML = '<p style="color:var(--smoke);font-size:.72rem;text-align:center;font-style:italic;padding:12px 0">PayPal unavailable — please use card.</p>';
     }
 
-    // Render Pay Later button explicitly
+    // Render Pay Later button explicitly — skip isEligible, let PayPal decide
     try {
-      var plBtn = window.paypal.Buttons({
-        fundingSource: window.paypal.FUNDING.PAYLATER,
-        style: { layout:'vertical', color:'gold', shape:'rect', height:48 },
-        onClick:     buttons.props.onClick,
-        createOrder: buttons.props.createOrder,
-        onApprove:   buttons.props.onApprove,
-        onError:     buttons.props.onError,
-        onCancel:    buttons.props.onCancel,
-      });
-      if (plBtn.isEligible()) {
+      var plContainer = document.getElementById('paylater-button-container');
+      if (plContainer) {
+        var plBtn = window.paypal.Buttons({
+          fundingSource: window.paypal.FUNDING.PAYLATER,
+          style: { layout:'vertical', color:'gold', shape:'rect', label:'paypal', height:48 },
+          onClick:     _ppHandlers.onClick,
+          createOrder: _ppHandlers.createOrder,
+          onApprove:   _ppHandlers.onApprove,
+          onError:     _ppHandlers.onError,
+          onCancel:    _ppHandlers.onCancel,
+        });
         await plBtn.render('#paylater-button-container');
       }
     } catch(plErr) {
-      console.warn('Pay Later button unavailable:', plErr);
+      console.warn('Pay Later unavailable for this account/region:', plErr.message || plErr);
     }
 
   } catch(err) {
