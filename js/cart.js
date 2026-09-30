@@ -809,12 +809,10 @@ window.openPayLater = function() {
   document.body.appendChild(overlay);
 };
 
-window.confirmPayLater = async function() {
+window.confirmPayLater = function() {
   var btn = document.getElementById('paylater-confirm-btn');
   var msg = document.getElementById('paylater-msg');
-  if (btn) { btn.disabled=true; btn.textContent='Opening PayPal…'; }
 
-  // Use PayPal to capture the first instalment only
   var items     = Cart.get();
   var subtotal  = items.reduce(function(s,i){ return s+(i.price*i.qty); }, 0);
   var shipPrice = (_pendingShipping && _pendingShipping.shipping_price) || 25;
@@ -822,28 +820,46 @@ window.confirmPayLater = async function() {
   var total     = Math.max(0, subtotal - disc + shipPrice);
   var firstPmt  = parseFloat((total / 4).toFixed(2));
 
-  try {
-    var order = await window.paypal.order.create({
-      intent: 'CAPTURE',
-      purchase_units: [{ amount: { value: String(firstPmt), currency_code:'USD' },
-        description: 'Pay in 4 — instalment 1 of 4' }]
-    });
-    var capture = await window.paypal.order.capture(order.id);
-    var payerEmail = capture?.payer?.email_address || '';
+  if (btn) { btn.style.display = 'none'; }
+  if (msg) { msg.textContent = 'Complete payment via PayPal below:'; }
 
-    document.getElementById('paylater-overlay').remove();
-    var shippingData    = _pendingShipping;
-    shippingData.paypal_email = payerEmail;
-    shippingData.paypal_name  = ((capture?.payer?.name?.given_name||'')+' '+(capture?.payer?.name?.surname||'')).trim();
-    shippingData.pay_later    = true;
-    shippingData.instalment_total = total;
-    shippingData.instalment_amount = firstPmt;
-    await finishOrder(shippingData, 'pay_later');
-  } catch(e) {
-    console.error('Pay in 4 failed:', e);
-    if (msg) { msg.style.color='#E01535'; msg.textContent = 'Payment failed — ' + (e.message||'please try again.'); }
-    if (btn) { btn.disabled=false; btn.textContent='Try Again'; }
+  // Replace confirm button with a real PayPal button for the first instalment
+  var ppContainer = document.getElementById('paylater-pp-container');
+  if (!ppContainer) {
+    ppContainer = document.createElement('div');
+    ppContainer.id = 'paylater-pp-container';
+    ppContainer.style.marginTop = '12px';
+    btn && btn.parentNode.appendChild(ppContainer);
   }
+
+  window.paypal.Buttons({
+    style: { layout:'vertical', color:'gold', shape:'rect', height:48 },
+    createOrder: function(data, actions) {
+      return actions.order.create({
+        intent: 'CAPTURE',
+        purchase_units: [{ amount: { value: String(firstPmt), currency_code:'USD' },
+          description: 'Pay in 4 — Instalment 1 of 4' }]
+      });
+    },
+    onApprove: async function(data, actions) {
+      var capture = await actions.order.capture();
+      var shippingData = _pendingShipping || captureShipping();
+      shippingData.paypal_email     = capture?.payer?.email_address || '';
+      shippingData.paypal_name      = ((capture?.payer?.name?.given_name||'')+' '+(capture?.payer?.name?.surname||'')).trim();
+      shippingData.pay_later        = true;
+      shippingData.instalment_total = total;
+      shippingData.instalment_amount = firstPmt;
+      var overlay = document.getElementById('paylater-overlay');
+      if (overlay) overlay.remove();
+      await finishOrder(shippingData, 'pay_later');
+    },
+    onError: function(err) {
+      console.error('Pay in 4 PayPal error:', err);
+      if (msg) { msg.style.color='#E01535'; msg.textContent = 'Payment failed — please try again.'; }
+      if (btn) { btn.style.display='block'; }
+      ppContainer.innerHTML = '';
+    }
+  }).render('#paylater-pp-container');
 };
 
 
