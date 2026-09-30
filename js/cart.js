@@ -790,7 +790,7 @@ window.openPayLater = function() {
     '<div style="background:var(--card,#0A1829);border:1px solid var(--border,#112033);border-radius:6px;width:100%;max-width:420px;padding:24px;font-family:var(--font-b)">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
     + '<div style="font-family:var(--font-d);font-size:1.2rem;letter-spacing:.04em;color:var(--white,#EEF4FF)">Pay in 4</div>'
-    + '<button onclick="document.getElementById('paylater-overlay').remove()" style="background:none;border:none;color:var(--smoke);font-size:1.2rem;cursor:pointer">✕</button>'
+    + '<button onclick="document.getElementById(&quot;paylater-overlay&quot;).remove()" style="background:none;border:none;color:var(--smoke);font-size:1.2rem;cursor:pointer">&#x2715;</button>'
     + '</div>'
     + '<p style="font-size:.8rem;color:var(--light,#C2DAFF);margin:0 0 16px">4 interest-free payments of <strong style="color:var(--white,#EEF4FF)">$' + instalment + '</strong></p>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">'
