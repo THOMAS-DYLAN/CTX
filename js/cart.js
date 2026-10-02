@@ -547,7 +547,7 @@ window.openCheckout = async function() {
   renderCheckoutModal(items, profile || {}, addr || {});
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
-  await Promise.all([mountPayPal(), mountCashApp(), mountZelle(), mountSquare()]);
+  await Promise.all([mountPayPal(), (SQUARE_APP_ID ? Promise.resolve() : mountCashApp()), mountZelle(), mountSquare()]);
 };
 
 window.closeCheckout = function() {
@@ -754,7 +754,7 @@ window.applyDiscountInModal = async function() {
   input.style.opacity = '.5';
 
   // Re-mount payment buttons so the charged total reflects the discount
-  Promise.all([mountPayPal(), mountCashApp(), mountZelle(), mountSquare()]);
+  Promise.all([mountPayPal(), (SQUARE_APP_ID ? Promise.resolve() : mountCashApp()), mountZelle(), mountSquare()]);
 };
 
 // ── Mount PayPal buttons ──────────────────────────────────
@@ -798,8 +798,8 @@ window.openPayLater = function() {
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">'
     + ['Today','In 2 weeks','In 4 weeks','In 6 weeks'].map(function(label,i){
         return '<div style="background:var(--surface,#07111F);border:1px solid var(--border,#112033);border-radius:4px;padding:10px;text-align:center">'
-          + '<div style="font-family:var(--font-c);font-size:.55rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--smoke);margin-bottom:4px">' + label + '</div>'
-          + '<div style="font-family:var(--font-d);font-size:1rem;color:var(--white,#EEF4FF)">$' + instalment + '</div>'
+          + '<div style="font-size:.55rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6A8FAD;margin-bottom:4px">' + label + '</div>'
+          + '<div style="font-size:1rem;font-weight:700;color:#EEF4FF">$' + instalment + '</div>'
           + '</div>';
       }).join('')
     + '</div>'
