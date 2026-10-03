@@ -9,8 +9,6 @@ import { supabase } from './supabase.js';
 // Falls back to empty object if the fetch fails.
 let _couponMap = {}; // populated on first applyDiscount call
 let _dealsCache = null; // active deals from DB
-const SQUARE_APP_ID = "sq0idp-C2w90yST1jqW55frQuSrpQ";
-const SQUARE_LOCATION_ID = "LDJ1E3KBXAGXS";
 
 var _couponMapLoaded = 0;
 async function _loadCoupons() {
@@ -525,6 +523,7 @@ window.updateShippingTotal = function() {
   const ship        = getSelectedShipping();
   const el          = document.getElementById('modal-total-val');
   if (el) el.textContent = '$' + (subtotal - discountAmt + ship.price).toFixed(2);
+  if (typeof mountSquare === 'function' && document.getElementById('square-afterpay-container')) mountSquare();
 };
 
 // ── Checkout state ────────────────────────────────────────
@@ -855,6 +854,11 @@ window.confirmPayLater = function() {
       if (overlay) overlay.remove();
       await finishOrder(shippingData, 'pay_later');
     },
+    onCancel: function() {
+      if (msg) { msg.textContent = ''; }
+      if (btn) { btn.style.display = 'block'; }
+      ppContainer.innerHTML = '';
+    },
     onError: function(err) {
       console.error('Pay in 4 PayPal error:', err);
       if (msg) { msg.style.color='#E01535'; msg.textContent = 'Payment failed — please try again.'; }
@@ -1104,78 +1108,157 @@ window.payCashApp = async function() {
 
 // ── Square (Cash App Pay + Afterpay) ──────────────────────────
 // Stays dormant until SQUARE_APP_ID and SQUARE_LOCATION_ID are set
+var _sqInstances = [];
+
+// Charges a Square token server-side (Supabase edge fn `square-charge`).
+// Throws if the charge doesn't go through, so an order is never placed unpaid.
+async function chargeSquareToken(token, total, method) {
+  var res = await supabase.functions.invoke('square-charge', {
+    body: { token: token, amount: Math.round(total * 100), currency: 'USD', method: method, reference: 'order-' + Date.now() }
+  });
+  if (res.error || !res.data || res.data.success !== true) {
+    throw new Error((res.data && res.data.error) || (res.error && res.error.message) || 'Payment was not completed.');
+  }
+  return res.data;
+}
+
+function currentCheckoutTotal() {
+  var items    = Cart.get();
+  var subtotal = items.reduce(function(s,i){ return s+i.price*i.qty; }, 0);
+  var disc     = _appliedDiscount ? Math.round(subtotal * _appliedDiscount.pct) / 100 : 0;
+  var ship     = getSelectedShipping().price;
+  return { total: Math.max(0, subtotal - disc + ship), ship: ship };
+}
+
 async function mountSquare() {
   if (!SQUARE_APP_ID || !SQUARE_LOCATION_ID) return; // hidden until keys provided
 
+  // Tear down anything from a previous mount (discount / shipping change)
+  _sqInstances.forEach(function(inst){ try { inst.destroy(); } catch(e) {} });
+  _sqInstances = [];
+  ['square-cashapp-container','square-afterpay-container'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+  });
+
   // Load Square SDK if not already loaded
   if (!window.Square) {
-    await new Promise(function(resolve, reject) {
-      var s = document.createElement('script');
-      s.src = 'https://web.squarecdn.com/v1/square.js';
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
+    try {
+      await new Promise(function(resolve, reject) {
+        var s = document.createElement('script');
+        s.src = 'https://web.squarecdn.com/v1/square.js';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    } catch(e) { console.warn('Square SDK failed to load'); return; }
   }
 
-  var items     = Cart.get();
-  var subtotal  = items.reduce(function(s,i){ return s+i.price*i.qty; }, 0);
-  var disc      = _appliedDiscount ? subtotal*(_appliedDiscount.pct/100) : 0;
-  var ship      = 25; // default
-  var total     = Math.max(0, subtotal - disc + ship);
+  var calc = currentCheckoutTotal();
+  var total = calc.total;
   var amountMoney = { amount: Math.round(total * 100), currency: 'USD' };
 
+  var payments;
   try {
-    var payments = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID);
-
-    // ── Cash App Pay ─────────────────────────────────────────────
-    try {
-      var cashAppPay = await payments.cashAppPay(amountMoney, {
-        redirectURL: window.location.href,
-        referenceId: 'ctx-' + Date.now(),
-      });
-      var cashAppContainer = document.getElementById('square-cashapp-container');
-      if (cashAppContainer) {
-        cashAppContainer.style.display = 'block';
-        await cashAppPay.attach('#square-cashapp-container');
-        cashAppPay.addEventListener('ontokenization', async function(e) {
-          var token = e.detail?.tokenResult?.token;
-          if (!token) return;
-          var shippingData = _pendingShipping || captureShipping();
-          shippingData.square_token = token;
-          await finishOrder(shippingData, 'pending_cashapp');
-        });
-      }
-    } catch(caErr) {
-      console.warn('Square Cash App Pay unavailable:', caErr.message);
-    }
-
-    // ── Afterpay / Clearpay ──────────────────────────────────────
-    try {
-      var paymentRequest = payments.paymentRequest({
-        countryCode: 'US',
-        currencyCode: 'USD',
-        total: { amount: String((total).toFixed(2)), label: 'Total' },
-      });
-      var afterpay = await payments.afterpayClearpay(paymentRequest);
-      var apContainer = document.getElementById('square-afterpay-container');
-      if (apContainer) {
-        apContainer.style.display = 'block';
-        await afterpay.attach('#square-afterpay-container');
-        afterpay.addEventListener('ontokenization', async function(e) {
-          var token = e.detail?.tokenResult?.token;
-          if (!token) return;
-          var shippingData = _pendingShipping || captureShipping();
-          shippingData.square_token = token;
-          await finishOrder(shippingData, 'afterpay');
-        });
-      }
-    } catch(apErr) {
-      console.warn('Square Afterpay unavailable:', apErr.message);
-    }
-
+    payments = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID);
   } catch(sqErr) {
     console.warn('Square payments init failed:', sqErr.message);
+    return;
+  }
+
+  // ── Cash App Pay ─────────────────────────────────────────────
+  try {
+    var cashAppPay = await payments.cashAppPay(amountMoney, {
+      redirectURL: window.location.href,
+      referenceId: 'ctx-' + Date.now(),
+    });
+    var cashAppContainer = document.getElementById('square-cashapp-container');
+    if (cashAppContainer) {
+      cashAppContainer.style.display = 'block';
+      await cashAppPay.attach('#square-cashapp-container');
+      _sqInstances.push(cashAppPay);
+      cashAppPay.addEventListener('ontokenization', async function(e) {
+        var token = e.detail && e.detail.tokenResult && e.detail.tokenResult.token;
+        if (!token) return;
+        try {
+          clearCheckoutError();
+          await chargeSquareToken(token, currentCheckoutTotal().total, 'cashapp');
+          var shippingData = _pendingShipping || captureShipping();
+          shippingData.square_token = token;
+          await finishOrder(shippingData, 'cashapp');
+        } catch(err) {
+          console.error('Square Cash App Pay failed:', err);
+          showCheckoutError('Cash App payment failed — ' + (err.message || 'please try again.'));
+        }
+      });
+    }
+  } catch(caErr) {
+    console.warn('Square Cash App Pay unavailable:', caErr.message);
+  }
+
+  // ── Afterpay / Clearpay ──────────────────────────────────────
+  // Per Square docs: needs requestShippingContact + a shippingaddresschanged
+  // handler, and tokenization is triggered by the button click (tokenize()),
+  // NOT an 'ontokenization' event (that's Cash App Pay only).
+  try {
+    var paymentRequest = payments.paymentRequest({
+      countryCode: 'US',
+      currencyCode: 'USD',
+      total: { amount: total.toFixed(2), label: 'Total' },
+      requestShippingContact: true,
+    });
+    var shipLabel = getSelectedShipping().label;
+    paymentRequest.addEventListener('afterpay_shippingaddresschanged', function() {
+      return {
+        shippingOptions: [{
+          id: 'ship',
+          label: shipLabel,
+          amount: calc.ship.toFixed(2),
+          total: { amount: total.toFixed(2), label: 'Total' },
+        }],
+      };
+    });
+
+    var apContainer = document.getElementById('square-afterpay-container');
+    if (apContainer) {
+      var afterpay = await payments.afterpayClearpay(paymentRequest);
+      apContainer.style.display = 'block';
+      await afterpay.attach('#square-afterpay-container');
+      _sqInstances.push(afterpay);
+
+      var apBusy = false;
+      apContainer.addEventListener('click', async function() {
+        if (apBusy) return;
+        clearCheckoutError();
+        if (!shippingValid()) {
+          showCheckoutError('Please complete your shipping details before paying with Afterpay.');
+          return;
+        }
+        _pendingShipping = captureShipping();
+        apBusy = true;
+        try {
+          var result = await afterpay.tokenize();
+          if (result.status !== 'OK') {
+            if (result.status !== 'Cancel') {
+              var m = result.errors && result.errors[0] && result.errors[0].message;
+              showCheckoutError('Afterpay: ' + (m || 'could not complete — please try again.'));
+            }
+            return;
+          }
+          await chargeSquareToken(result.token, currentCheckoutTotal().total, 'afterpay');
+          var shippingData = _pendingShipping || captureShipping();
+          shippingData.square_token = result.token;
+          await finishOrder(shippingData, 'afterpay');
+        } catch(err) {
+          console.error('Square Afterpay failed:', err);
+          showCheckoutError('Afterpay payment failed — ' + (err.message || 'please try again.'));
+        } finally {
+          apBusy = false;
+        }
+      });
+    }
+  } catch(apErr) {
+    console.warn('Square Afterpay unavailable:', apErr.message);
   }
 }
 
@@ -1233,7 +1316,7 @@ window.confirmZelle = async function() {
 async function sendOrderNotification(items, shipping, profile, paymentStatus, confirmToken) {
   paymentStatus = paymentStatus || 'paid';
   var isPending = ['pending_cashapp','pending_zelle','pending_bitcoin'].indexOf(paymentStatus) !== -1;
-  var payLabel   = paymentStatus === 'pending_cashapp' ? 'Cash App' : paymentStatus === 'pending_zelle' ? 'Zelle' : paymentStatus === 'pending_bitcoin' ? 'Bitcoin' : 'PayPal';
+  var payLabel   = paymentStatus === 'afterpay' ? 'Afterpay' : paymentStatus === 'pay_later' ? 'Pay in 4 (1st instalment via PayPal)' : paymentStatus === 'cashapp' ? 'Cash App Pay' : paymentStatus === 'pending_cashapp' ? 'Cash App' : paymentStatus === 'pending_zelle' ? 'Zelle' : paymentStatus === 'pending_bitcoin' ? 'Bitcoin' : 'PayPal';
   var confirmUrl = 'https://utqviljholfvpfztfuvx.supabase.co/functions/v1/confirm-order?token=' + (confirmToken || '');
   var discount   = _appliedDiscount;
   var subtotal   = items.reduce(function(s,i) { return s + i.price * i.qty; }, 0);
@@ -1353,7 +1436,7 @@ async function finishOrder(shipping, paymentStatus, skipInventory) {
         shipping_city:    shipping.city || null,
         shipping_state:   shipping.state || null,
         shipping_zip:     shipping.zip || null,
-        payment_method:   paymentStatus === 'pending_cashapp' ? 'cashapp' : paymentStatus === 'pending_zelle' ? 'zelle' : paymentStatus === 'pending_bitcoin' ? 'bitcoin' : 'paypal',
+        payment_method:   paymentStatus === 'afterpay' ? 'afterpay' : paymentStatus === 'pay_later' ? 'pay_in_4' : paymentStatus === 'cashapp' ? 'cashapp' : paymentStatus === 'pending_cashapp' ? 'cashapp' : paymentStatus === 'pending_zelle' ? 'zelle' : paymentStatus === 'pending_bitcoin' ? 'bitcoin' : 'paypal',
       });
       if (orderId) orderIds.push(orderId);
     }
