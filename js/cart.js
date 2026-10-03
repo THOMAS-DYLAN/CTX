@@ -502,8 +502,6 @@ const STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL'
 // Replace with live Client ID from developer.paypal.com → Apps & Credentials → Live
 const PAYPAL_CLIENT_ID  = 'AZSLv66rtWR7MDNObiUvYST-XeQEl4-aDzwxsV42ocY3EGXLLUscQ1l_zmmB4FPOOAkMLU5wlMpsGYUa';
 const CASHAPP_USERNAME  = '$CTXLabs';
-onst SQUARE_APP_ID = "sq0idp-C2w90yST1jqW55frQuSrpQ";
-const SQUARE_LOCATION_ID = "LDJ1E3KBXAGXS";
 
 // Square keys: use the globals if the site defines them, otherwise these (public client IDs).
 function sqAppId()  { return (typeof SQUARE_APP_ID      !== 'undefined' && SQUARE_APP_ID)      || 'sq0idp-C2w90yST1jqW55frQuSrpQ'; }
@@ -1188,7 +1186,12 @@ async function mountSquare() {
 
   // ── Cash App Pay ─────────────────────────────────────────────
   try {
-    var cashAppPay = await payments.cashAppPay(amountMoney, {
+    var caRequest = payments.paymentRequest({
+      countryCode: 'US',
+      currencyCode: 'USD',
+      total: { amount: total.toFixed(2), label: 'Total' },
+    });
+    var cashAppPay = await payments.cashAppPay(caRequest, {
       redirectURL: window.location.href,
       referenceId: 'ctx-' + Date.now(),
     });
